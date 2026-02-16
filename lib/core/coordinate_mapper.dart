@@ -136,4 +136,38 @@ class CoordinateMapper {
     
     return distancePixels / distanceMeters;
   }
+
+  /// Calculates the rotation of "True North" relative to the PDF coordinate system.
+  /// Returns the angle in radians where 0 is East, PI/2 is South (in screen coords).
+  /// To get the rotation correction for the compass, use this angle.
+  /// Returns 0.0 if not calibrated.
+  double get northAngleRad {
+    if (!isCalibrated) return 0.0;
+
+    // We need to calculate the affine transform coefficients 'b' and 'd'
+    // which represent how PDF x and y change with Latitude (North).
+    
+    // GPS coordinates matrix (3x3)
+    final x1 = _gpsRef1!.x; final y1 = _gpsRef1!.y; // x=lng, y=lat
+    final x2 = _gpsRef2!.x; final y2 = _gpsRef2!.y;
+    final x3 = _gpsRef3!.x; final y3 = _gpsRef3!.y;
+    
+    // PDF coordinates
+    final u1 = _pdfRef1!.x; final u2 = _pdfRef2!.x; final u3 = _pdfRef3!.x;
+    final v1 = _pdfRef1!.y; final v2 = _pdfRef2!.y; final v3 = _pdfRef3!.y;
+    
+    // Calculate determinant
+    final det = x1 * (y2 - y3) - y1 * (x2 - x3) + (x2 * y3 - x3 * y2);
+    
+    if (det.abs() < 1e-10) return 0.0;
+    
+    // b corresponds to change in PDF_x per unit Latitude
+    final b = ((u1 * (x3 - x2) + u2 * (x1 - x3) + u3 * (x2 - x1)) / det);
+    
+    // d corresponds to change in PDF_y per unit Latitude
+    final d = ((v1 * (x3 - x2) + v2 * (x1 - x3) + v3 * (x2 - x1)) / det);
+    
+    // Vector (b, d) represents the North direction in PDF space.
+    return atan2(d, b);
+  }
 }
