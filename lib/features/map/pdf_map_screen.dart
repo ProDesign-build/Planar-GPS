@@ -647,7 +647,7 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
           ),
 
           // 6. FAB
-          Positioned(
+           Positioned(
              bottom: 30,
              right: 16,
              child: FloatingActionButton(
@@ -668,11 +668,21 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
                      if (_userPdfLocation != null) {
                         _centerMap(calculateZoom: true); 
                      } else {
-                        UiUtils.showInfoSnackBar(context, 'Calibrate first!');
+                        // Diagnostic check
+                        final mapper = CoordinateMapper();
+                        if (!mapper.isCalibrated) {
+                           UiUtils.showInfoSnackBar(context, 'Calibrate map first!');
+                        } else {
+                           // Calibrated but no location returned from mapper
+                           // likely collinear points or determinant zero
+                           UiUtils.showErrorSnackBar(context, 'Calibration invalid (collinear points?) or GPS out of bounds.');
+                           debugPrint("Calibration Debug: Ref1: ${mapper.gpsRef1}, Ref2: ${mapper.gpsRef2}, Ref3: ${mapper.gpsRef3}");
+                        }
                      }
                    } catch (e) {
+                     debugPrint("Error getting location: $e");
                      if (mounted) {
-                        UiUtils.showErrorSnackBar(context, 'Error getting location');
+                        UiUtils.showErrorSnackBar(context, 'Error getting location: $e');
                      }
                    }
                },

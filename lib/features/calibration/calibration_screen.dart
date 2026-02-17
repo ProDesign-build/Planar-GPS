@@ -135,6 +135,24 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       return;
     }
 
+    if (_pdfPoints.length == 2) {
+       // Validate collinearity before saving 3rd point
+       final p1 = _pdfPoints[0];
+       final p2 = _pdfPoints[1];
+       final p3 = Point(_tempTapPosition!.dx / 2.0, _tempTapPosition!.dy / 2.0);
+       
+       // Area of triangle rule: Area = abs(x1(y2-y3) + x2(y3-y1) + x3(y1-y2)) / 2
+       // If area is near zero, points are collinear.
+       final area = (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y)).abs() / 2.0;
+
+       // Threshold: pixels (since we are in PDF coords, points are pixels)
+       // Let's say if area is super small (points in line), reject.
+       if (area < 100) { // arbitrary threshold, triangle should have some Area
+          UiUtils.showErrorSnackBar(context, "Points are too close to a straight line! Pick a point further away from the line between 1 and 2.");
+          return;
+       }
+    }
+
     setState(() {
       _pdfPoints.add(Point(_tempTapPosition!.dx / 2.0, _tempTapPosition!.dy / 2.0));
       _gpsPoints.add(Point(lat, lng));
