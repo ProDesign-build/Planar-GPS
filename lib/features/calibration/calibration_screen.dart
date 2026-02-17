@@ -125,19 +125,37 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   }
 
   void _savePoint() {
-    if (_tempTapPosition == null) return;
+    print("CalibrationScreen: _savePoint called. Step: $_currentStep");
+    if (_tempTapPosition == null) {
+      print("CalibrationScreen: _tempTapPosition is null");
+      return;
+    }
     
     final lat = double.tryParse(_latController.text);
     final lng = double.tryParse(_lngController.text);
     
     if (lat == null || lng == null) {
+      print("CalibrationScreen: Invalid lat/lng: ${_latController.text}, ${_lngController.text}");
       UiUtils.showErrorSnackBar(context, "Please enter valid GPS coordinates");
       return;
+    }
+
+    // Check for identical/too close points
+    for (final point in _gpsPoints) {
+      final distance = Geolocator.distanceBetween(point.x, point.y, lat, lng);
+      if (distance < 1.0) { // 1 meter threshold
+        print("CalibrationScreen: Point too close to existing point ($distance m).");
+        UiUtils.showErrorSnackBar(context, "Points must be at least 1m apart. Please move.");
+        return;
+      }
     }
 
     setState(() {
       _pdfPoints.add(Point(_tempTapPosition!.dx / 2.0, _tempTapPosition!.dy / 2.0));
       _gpsPoints.add(Point(lat, lng));
+      
+      print("CalibrationScreen: Point $_currentStep saved. GPS: $lat, $lng");
+
       
       _latController.clear();
       _lngController.clear();
@@ -146,11 +164,13 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     });
 
     if (_pdfPoints.length == 3) {
+      print("CalibrationScreen: 3 points collected. Finishing.");
       _finishCalibration();
     }
   }
 
   void _finishCalibration() {
+    print("CalibrationScreen: _finishCalibration called.");
     CoordinateMapper().setCalibration(
       gps1: _gpsPoints[0],
       pdf1: _pdfPoints[0],
