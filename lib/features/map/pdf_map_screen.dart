@@ -276,6 +276,7 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
     
     _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (Position position) {
+        debugPrint("Position Update: ${position.latitude}, ${position.longitude}, Acc: ${position.accuracy}");
         if (mounted) {
            setState(() {
              _currentGpsAccuracy = position.accuracy;
@@ -287,6 +288,8 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
                  _gpsHeading = position.heading;
              }
            });
+           
+           // Force update location logic even if seemingly unchanged
            _updateUserLocation(position.latitude, position.longitude);
            
            if (_isFollowingUser && _userPdfLocation != null) {
@@ -294,6 +297,9 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
            }
         }
       },
+      onError: (e) {
+         debugPrint("Position Stream Error: $e");
+      }
     );
   }
 
@@ -731,6 +737,7 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
       minScale: 0.1,
       maxScale: 20.0,
       constrained: false,
+      boundaryMargin: const EdgeInsets.all(double.infinity), // Allow infinite panning (Fixes snapping)
       onInteractionStart: (_) {
         if (_isFollowingUser) {
           setState(() => _isFollowingUser = false);
@@ -741,6 +748,7 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
           width: displayWidth,
           height: displayHeight,
           child: Stack(
+            clipBehavior: Clip.none, // Allow marker to exceed bounds (Fixes missing arrow)
             children: [
               Image.memory(
                 displayBytes,
