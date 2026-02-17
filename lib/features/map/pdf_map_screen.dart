@@ -838,6 +838,17 @@ class _PdfMapScreenState extends State<PdfMapScreen> {
     // Center the arrow on the location point
     final offset = arrowSize / 2;
     
+    // Calculate rotation:
+    // 1. Get North angle in PDF space (from calibration)
+    final northAngle = CoordinateMapper().northAngleRad;
+    // 2. Add device heading (clockwise from North)
+    final deviceHeading = _currentHeading * (pi / 180);
+    // 3. Convert to "Icon Rotation" (Icon points Up, so we add 90 deg to align 0 with Right axis, effectively)
+    // Detailed: NorthAngle is angle from X-axis. Icon starts at -pi/2 (Up). 
+    // TargetAngle = NorthAngle + DeviceHeading.
+    // Rotation = TargetAngle - StartAngle = NorthAngle + DeviceHeading - (-pi/2)
+    final rotation = northAngle + deviceHeading + (pi / 2);
+
     return Transform.translate(
       offset: Offset(-offset, -offset),
       child: Container(
@@ -857,7 +868,7 @@ class _PdfMapScreenState extends State<PdfMapScreen> {
             ),
             child: Center(
             child: Transform.rotate(
-              angle: _currentHeading * (pi / 180),
+              angle: rotation,
               child: Icon(
                 Icons.navigation,
                 size: arrowSize * 0.4,
