@@ -40,13 +40,22 @@ class _LocationMarkerState extends State<LocationMarker> {
 
   @override
   Widget build(BuildContext context) {
+    // If moving with GPS heading, show ONLY the navigation arrow
+    if (widget.isGpsHeading && widget.rotation != null) {
+       return Transform.rotate(
+          angle: _displayRotation,
+          child: const Icon(Icons.navigation, color: Colors.blue, size: 30), // Solid arrow
+       );
+    }
+
+    // Otherwise (Stationary/Compass), show Dot + Beam
     return SizedBox(
       width: widget.radius * 2,
       height: widget.radius * 2,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 1. Heading Beam
+          // 1. Heading Beam (Only if we have rotation)
           if (widget.rotation != null)
              TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: _displayRotation, end: _displayRotation),
@@ -58,9 +67,7 @@ class _LocationMarkerState extends State<LocationMarker> {
                   child: CustomPaint(
                     size: Size(widget.radius * 2, widget.radius * 2),
                     painter: BeamPainter(
-                      color: widget.isGpsHeading 
-                        ? Colors.blue.withOpacity(0.2) 
-                        : Colors.blueAccent.withOpacity(0.2),
+                      color: Colors.blue.withOpacity(0.2),
                     ),
                   ),
                 );
@@ -84,7 +91,7 @@ class _LocationMarkerState extends State<LocationMarker> {
             ),
           ),
 
-          // 3. Blue Dot
+          // 3. Blue Dot (No inner icon)
           Container(
             width: widget.radius * 0.7,
             height: widget.radius * 0.7,
@@ -93,20 +100,6 @@ class _LocationMarkerState extends State<LocationMarker> {
               shape: BoxShape.circle,
             ),
           ),
-
-          // 4. Arrow
-          if (widget.rotation != null)
-             TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: _displayRotation, end: _displayRotation),
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              builder: (context, angle, child) {
-                 return Transform.rotate(
-                   angle: angle,
-                   child: Icon(Icons.navigation, color: Colors.white, size: widget.radius * 0.7),
-                 );
-              },
-            ),
         ],
       ),
     );
@@ -127,18 +120,13 @@ class BeamPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
     
-    // Draw a sector (beam) facing "Up" (which is 0 rotation in our rotated space)
-    // Actually, usually 0 is Right in Canvas, but we rotate the whole canvas.
-    // If we want it to point "Up" relative to the rotation, we draw it at -pi/2.
-    // But since we are passing 'rotation' that aligns 'Up' to the target, we should draw 'Up'.
-    
+    // Beam logic remains the same
     final path = Path();
     path.moveTo(center.dx, center.dy);
-    // 90 degree beam centered on -pi/2 (Up)
     path.arcTo(
       Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2 - math.pi / 4, // Start -90 - 45
-      math.pi / 2, // Sweep 90
+      -math.pi / 2 - math.pi / 4, 
+      math.pi / 2, 
       false,
     );
     path.close();
