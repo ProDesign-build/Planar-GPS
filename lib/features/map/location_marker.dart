@@ -103,7 +103,7 @@ class _LocationMarkerState extends State<LocationMarker> {
               builder: (context, angle, child) {
                  return Transform.rotate(
                    angle: angle,
-                   child: const Icon(Icons.navigation, color: Colors.white, size: 14),
+                   child: Icon(Icons.navigation, color: Colors.white, size: widget.radius * 0.7),
                  );
               },
             ),
