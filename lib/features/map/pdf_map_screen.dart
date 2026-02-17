@@ -27,7 +27,7 @@ class PdfMapScreen extends StatefulWidget {
   State<PdfMapScreen> createState() => _PdfMapScreenState();
 }
 
-class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderStateMixin {
+class _PdfMapScreenState extends State<PdfMapScreen> {
   final TransformationController _transformController = TransformationController();
   PdfDocument? _document;
   PdfPageImage? _pageImage;
@@ -47,28 +47,13 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
   double _currentLng = 0.0;
   bool _showCalibrationSuccess = false;
   
-  // Compass & Heading
   StreamSubscription<CompassEvent>? _compassStream;
-  double _magnetometerHeading = 0.0;
-  double _gpsHeading = 0.0;
-  double _currentSpeed = 0.0;
+  double _currentHeading = 0.0;
   bool _isFollowingUser = false;
-  
-  // Animation
-  AnimationController? _mapAnimController;
-  Animation<Matrix4>? _mapAnimation;
 
   @override
   void initState() {
     super.initState();
-    _mapAnimController = AnimationController(
-       vsync: this, 
-       duration: const Duration(milliseconds: 500),
-    );
-    _mapAnimController!.addListener(() {
-       _transformController.value = _mapAnimation!.value;
-    });
-
     _checkPermissionsAndStartStream();
     _startCompassStream();
     
@@ -94,7 +79,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
     _compassStream?.cancel();
     _transformController.removeListener(_onTransformChange);
     _transformController.dispose();
-    _mapAnimController?.dispose();
     super.dispose();
   }
 
@@ -276,20 +260,12 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
     
     _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (Position position) {
-        debugPrint("Position Update: ${position.latitude}, ${position.longitude}, Acc: ${position.accuracy}");
         if (mounted) {
            setState(() {
              _currentGpsAccuracy = position.accuracy;
              _currentLat = position.latitude;
              _currentLng = position.longitude;
-             _currentSpeed = position.speed; 
-             // Trust GPS heading only if moving > 1 m/s (approx 3.6 km/h)
-             if (position.speed > 1.0) {
-                 _gpsHeading = position.heading;
-             }
            });
-           
-           // Force update location logic even if seemingly unchanged
            _updateUserLocation(position.latitude, position.longitude);
            
            if (_isFollowingUser && _userPdfLocation != null) {
@@ -297,9 +273,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
            }
         }
       },
-      onError: (e) {
-         debugPrint("Position Stream Error: $e");
-      }
     );
   }
 
@@ -307,7 +280,7 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
     _compassStream = FlutterCompass.events?.listen((event) {
       if (mounted) {
         setState(() {
-          _magnetometerHeading = event.heading ?? 0.0;
+          _currentHeading = event.heading ?? 0.0;
         });
       }
     });
@@ -502,15 +475,8 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
       ..translate(targetX, targetY)
       ..scale(targetScale);
     
-    if (_mapAnimController != null) {
-      _mapAnimation = Matrix4Tween(
-        begin: _transformController.value,
-        end: newMatrix,
-      ).animate(CurvedAnimation(parent: _mapAnimController!, curve: Curves.fastOutSlowIn));
-      _mapAnimController!.forward(from: 0);
-    } else {
-      _transformController.value = newMatrix;
-    }
+    _transformController.value = newMatrix;
+    print("[PdfMapScreen] Map centered with scale: $targetScale");
   }
 
   Future<void> _saveMapState() async {
@@ -737,7 +703,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
       minScale: 0.1,
       maxScale: 20.0,
       constrained: false,
-      boundaryMargin: const EdgeInsets.all(double.infinity), // Allow infinite panning (Fixes snapping)
       onInteractionStart: (_) {
         if (_isFollowingUser) {
           setState(() => _isFollowingUser = false);
@@ -748,7 +713,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
           width: displayWidth,
           height: displayHeight,
           child: Stack(
-            clipBehavior: Clip.none, // Allow marker to exceed bounds (Fixes missing arrow)
             children: [
               Image.memory(
                 displayBytes,
@@ -757,51 +721,16 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
                 fit: BoxFit.none,
               ),
               if (_userPdfLocation != null)
-                 _buildUserMarker(),
+                 Positioned(
+                    left: _userPdfLocation!.x * 2.0,
+                    top: _userPdfLocation!.y * 2.0,
+                    child: _buildDynamicLocationArrow(),
+                 )
             ],
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildUserMarker() {
-     final screenWidth = MediaQuery.of(context).size.width;
-     final currentScale = _transformController.value.getMaxScaleOnAxis();
-     
-     // Target size: 12.5% of viewport width
-     final targetDisplaySize = screenWidth * 0.125;
-     
-     // Size in content coordinates
-     final markerDiameter = targetDisplaySize / currentScale;
-     final radius = markerDiameter / 2;
-     
-     // Rotation Logic
-     final northAngle = CoordinateMapper().northAngleRad;
-     
-     // Hybrid Heading: Use GPS bearing if moving > 1.0 m/s, else Magnetometer
-     double deviceHeading = _magnetometerHeading;
-     bool isGps = false;
-     
-     if (_currentSpeed > 1.0) {
-        deviceHeading = _gpsHeading;
-        isGps = true;
-     }
-
-     final headingRad = deviceHeading * (pi / 180);
-     final rotation = northAngle + headingRad + (pi / 2);
-
-     return AnimatedPositioned(
-        duration: const Duration(milliseconds: 1000),
-        curve: Curves.linear,
-        left: (_userPdfLocation!.x * 2.0) - radius,
-        top: (_userPdfLocation!.y * 2.0) - radius,
-        child: LocationMarker(
-           rotation: rotation,
-           isGpsHeading: isGps,
-           radius: radius,
-        ),
-     );
   }
 
    Widget _buildTopBar() {
@@ -892,7 +821,55 @@ class _PdfMapScreenState extends State<PdfMapScreen> with SingleTickerProviderSt
     );
   }
 
-
+  /// Builds a dynamic location arrow that scales with zoom (Issue #2)
+  /// Size is always 12.5% of the viewport width
+  Widget _buildDynamicLocationArrow() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final currentScale = _transformController.value.getMaxScaleOnAxis();
+    
+    // Arrow should be 12.5% of viewport width
+    final targetDisplaySize = screenWidth * 0.125;
+    
+    // Calculate size in content coordinates
+    // displaySize = contentSize * scale
+    // contentSize = displaySize / scale
+    final arrowSize = targetDisplaySize / currentScale;
+    
+    // Center the arrow on the location point
+    final offset = arrowSize / 2;
+    
+    return Transform.translate(
+      offset: Offset(-offset, -offset),
+      child: Container(
+        width: arrowSize,
+        height: arrowSize,
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withOpacity(0.2),
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Container(
+            width: arrowSize * 0.6,
+            height: arrowSize * 0.6,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.4),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+            child: Transform.rotate(
+              angle: _currentHeading * (pi / 180),
+              child: Icon(
+                Icons.navigation,
+                size: arrowSize * 0.4,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
 }
 
 class GridBackgroundPainter extends CustomPainter {
